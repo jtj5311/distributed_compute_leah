@@ -158,6 +158,85 @@ Once the smoke test passes, the next practical step is usually to move your real
 work into a function and switch from a serial `map` or loop to `pmap`, or to use
 `@spawnat` for more manual control.
 
+## Fun Distributed Benchmark
+
+After the smoke test passes, run a larger CPU-bound Mandelbrot benchmark:
+
+```bash
+JULIA_REMOTE_HOST=pop-os.tail50cba4.ts.net \
+JULIA_REMOTE_USER=leah \
+JULIA_REMOTE_DIR=/tmp/distributed_compute_leah \
+JULIA_LOCAL_WORKERS=1 \
+JULIA_REMOTE_WORKERS=2 \
+julia distributed_benchmark.jl
+```
+
+Optional knobs:
+
+```bash
+BENCH_WIDTH=2400
+BENCH_HEIGHT=1600
+BENCH_MAX_ITER=900
+BENCH_TASKS=96
+```
+
+The benchmark compares a serial run on the master process against a distributed
+`pmap` run across all workers, then prints a checksum to confirm both paths did
+the same work.
+
+## Distributed Least Squares
+
+This demo generates a synthetic least-squares problem in row shards. Each worker
+computes local `X'X` and `X'y` pieces, the master reduces those small aggregates,
+and then the master solves the final coefficient vector.
+
+```bash
+JULIA_REMOTE_HOST=pop-os.tail50cba4.ts.net \
+JULIA_REMOTE_USER=leah \
+JULIA_REMOTE_DIR=/tmp/distributed_compute_leah \
+JULIA_LOCAL_WORKERS=1 \
+JULIA_REMOTE_WORKERS=2 \
+LS_FEATURES=48 \
+LS_TASKS=96 \
+LS_ROWS_PER_TASK=2000000 \
+LS_SERIAL=0 \
+julia distributed_least_squares.jl
+```
+
+On the current two-laptop setup, that processes 192 million generated rows in
+about 40 seconds. For a run closer to one minute, try
+`LS_ROWS_PER_TASK=3000000`.
+
+## Using More CPU
+
+There are two useful knobs:
+
+- `JULIA_LOCAL_WORKERS`: number of worker processes on the master laptop
+- `JULIA_REMOTE_WORKERS`: number of worker processes on the remote laptop
+- `JULIA_WORKER_THREADS`: Julia threads per worker process
+
+For these `pmap` demos, start by using more single-threaded worker processes.
+For example, on two 8-core machines:
+
+```bash
+JULIA_REMOTE_HOST=pop-os.tail50cba4.ts.net \
+JULIA_REMOTE_USER=leah \
+JULIA_REMOTE_DIR=/tmp/distributed_compute_leah \
+JULIA_LOCAL_WORKERS=7 \
+JULIA_REMOTE_WORKERS=8 \
+JULIA_WORKER_THREADS=1 \
+LS_FEATURES=48 \
+LS_TASKS=480 \
+LS_ROWS_PER_TASK=600000 \
+LS_SERIAL=0 \
+julia distributed_least_squares.jl
+```
+
+Use one fewer local worker than local cores if you want the master process and
+desktop to stay responsive. For threaded libraries or threaded worker functions,
+use fewer processes and increase `JULIA_WORKER_THREADS`, for example 2 workers
+with 4 threads each on an 8-core laptop.
+
 ## Mixed Local + Remote Pattern
 
 This is the model you asked for: one Julia session on this laptop acts as:

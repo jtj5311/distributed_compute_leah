@@ -40,12 +40,13 @@ function require_env(name::AbstractString)
     return value
 end
 
-function project_flag()
-    return "--project=$(pwd())"
-end
-
 function remote_dir()
     return get(ENV, "JULIA_REMOTE_DIR", pwd())
+end
+
+function worker_exeflags(project_dir::AbstractString)
+    threads = get(ENV, "JULIA_WORKER_THREADS", "1")
+    return "--threads=$threads --project=$project_dir"
 end
 
 function remote_spec()
@@ -61,7 +62,14 @@ function launch_workers()
     launched = Int[]
 
     if local_workers > 0
-        append!(launched, addprocs(local_workers; topology = :master_worker))
+        append!(
+            launched,
+            addprocs(
+                local_workers;
+                exeflags = worker_exeflags(pwd()),
+                topology = :master_worker,
+            ),
+        )
     end
 
     if remote_workers > 0
@@ -72,7 +80,7 @@ function launch_workers()
                 [(remote, remote_workers)];
                 dir = remote_dir(),
                 exename = remote_exename,
-                exeflags = project_flag(),
+                exeflags = worker_exeflags(remote_dir()),
                 topology = :master_worker,
                 tunnel = true,
             ),
